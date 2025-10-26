@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarjetas de Crédito - Presupuesto Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .utilizado-bajo { background-color: #dcfce7; }
+        .utilizado-medio { background-color: #fef3c7; }
+        .utilizado-alto { background-color: #fee2e2; }
+        .pagada { background-color: #dcfce7; }
+        .pendiente { background-color: #fee2e2; }
+        input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-900">Tarjetas de Crédito</h1>
+                    <p class="text-gray-600 mt-2">Seguimiento de saldos y límites de crédito</p>
+                </div>
+                <button onclick="app.agregarTarjeta()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition">
+                    ➕ Agregar Tarjeta
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Crédito Total</p>
+                    <p class="text-3xl font-bold text-gray-900">$<span id="creditoTotal">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Deuda Total</p>
+                    <p class="text-3xl font-bold text-red-600">$<span id="deudaTotal">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Disponible Total</p>
+                    <p class="text-3xl font-bold text-green-600">$<span id="disponibleTotal">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">% Promedio Utilizado</p>
+                    <p class="text-3xl font-bold text-blue-600"><span id="porcentajePromedio">0</span>%</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gray-900 text-white">
+                                <th class="px-4 py-4 text-left">Tarjeta (Last 4)</th>
+                                <th class="px-4 py-4 text-right">Total Crédito</th>
+                                <th class="px-4 py-4 text-right">Límite 25%</th>
+                                <th class="px-4 py-4 text-right">Deuda Actual</th>
+                                <th class="px-4 py-4 text-right">Disponible</th>
+                                <th class="px-4 py-4 text-center">% Utilizado</th>
+                                <th class="px-4 py-4 text-center">Estado</th>
+                                <th class="px-4 py-4 text-center">Fecha Corte</th>
+                                <th class="px-4 py-4 text-center">Auto-pago (días)</th>
+                                <th class="px-4 py-4 text-center">Pagado</th>
+                                <th class="px-4 py-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaTarjetas"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow mt-6 p-6">
+                <h2 class="text-2xl font-bold mb-4">Resumen por Tarjeta</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="resumenTarjetas"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DATOS_INICIALES = [
+            {
+                nombre: 'Discover C.C.',
+                creditoTotal: 1500.00,
+                deuda: 258.25,
+                last4: '4786',
+                fechaCorte: 11,
+                autopayDias: 1,
+                pagado: false
+            },
+            {
+                nombre: 'Rockland Trust CC',
+                creditoTotal: 500.00,
+                deuda: 77.53,
+                last4: '8316',
+                fechaCorte: 17,
+                autopayDias: 11,
+                pagado: false
+            },
+            {
+                nombre: 'Capital One C.C.',
+                creditoTotal: 800.00,
+                deuda: 142.20,
+                last4: '3109',
+                fechaCorte: 13,
+                autopayDias: 11,
+                pagado: false
+            }
+        ];
+
+        let app = {
+            datos: JSON.parse(localStorage.getItem('tarjetas_app')) || DATOS_INICIALES,
+
+            guardar() {
+                localStorage.setItem('tarjetas_app', JSON.stringify(this.datos));
+                this.renderizar();
+            },
+
+            renderizar() {
+                const tabla = document.getElementById('tablaTarjetas');
+                const resumen = document.getElementById('resumenTarjetas');
+                tabla.innerHTML = '';
+                resumen.innerHTML = '';
+
+                this.datos.forEach((tarjeta, idx) => {
+                    const disponible = tarjeta.creditoTotal - tarjeta.deuda;
+                    const limite25 = tarjeta.creditoTotal * 0.25;
+                    const porcentajeUtilizado = (tarjeta.deuda / tarjeta.creditoTotal) * 100;
+                    
+                    let claseEstado = '';
+                    let estado = '';
+                    if (porcentajeUtilizado <= 25) {
+                        claseEstado = 'utilizado-bajo';
+                        estado = 'Óptimo';
+                    } else if (porcentajeUtilizado <= 50) {
+                        claseEstado = 'utilizado-medio';
+                        estado = 'Bueno';
+                    } else {
+                        claseEstado = 'utilizado-alto';
+                        estado = 'Revisar';
+                    }
+
+                    const clasePagado = tarjeta.pagado ? 'pagada' : 'pendiente';
+                    const diasAlCorte = tarjeta.fechaCorte - new Date().getDate();
+                    const alertaCorte = diasAlCorte <= 3 && diasAlCorte > 0 ? '🔴 ' : '';
+
+                    const tr = document.createElement('tr');
+                    tr.className = `border-b border-gray-200 hover:bg-gray-50 transition ${claseEstado}`;
+                    tr.innerHTML = `
+                        <td class="px-4 py-4 font-semibold">
+                            <input type="text" value="${tarjeta.nombre}" 
+                                   onchange="app.actualizar(${idx}, 'nombre', this.value)"
+                                   class="w-full px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                            <span class="text-gray-500 text-xs">...${tarjeta.last4}</span>
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <input type="number" value="${tarjeta.creditoTotal}" step="0.01"
+                                   onchange="app.actualizar(${idx}, 'creditoTotal', parseFloat(this.value))"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-right font-semibold text-green-600">
+                            $${limite25.toFixed(2)}
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <input type="number" value="${tarjeta.deuda}" step="0.01"
+                                   onchange="app.actualizar(${idx}, 'deuda', parseFloat(this.value))"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-right font-semibold">
+                            $${disponible.toFixed(2)}
+                        </td>
+                        <td class="px-4 py-4 text-center font-bold">
+                            ${porcentajeUtilizado.toFixed(1)}%
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <span class="px-2 py-1 rounded-lg text-xs font-semibold ${claseEstado}">${estado}</span>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <input type="number" value="${tarjeta.fechaCorte}" min="1" max="31"
+                                   onchange="app.actualizar(${idx}, 'fechaCorte', parseInt(this.value))"
+                                   class="w-12 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500">
+                            <span class="text-xs text-gray-500">${alertaCorte}Día ${tarjeta.fechaCorte}</span>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <input type="number" value="${tarjeta.autopayDias}" min="1" max="30"
+                                   onchange="app.actualizar(${idx}, 'autopayDias', parseInt(this.value))"
+                                   class="w-12 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <input type="checkbox" ${tarjeta.pagado ? 'checked' : ''}
+                                   onchange="app.actualizar(${idx}, 'pagado', this.checked)"
+                                   class="w-4 h-4 text-green-600 rounded">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <button onclick="app.eliminar(${idx})" class="text-red-600 hover:text-red-800 font-medium">🗑️</button>
+                        </td>
+                    `;
+                    tabla.appendChild(tr);
+
+                    // Resumen card
+                    const card = document.createElement('div');
+                    card.className = `${claseEstado} p-4 rounded-lg border-l-4 ${claseEstado === 'utilizado-bajo' ? 'border-green-500' : claseEstado === 'utilizado-medio' ? 'border-yellow-500' : 'border-red-500'}`;
+                    card.innerHTML = `
+                        <h3 class="font-bold text-gray-900">${tarjeta.nombre}</h3>
+                        <p class="text-xs text-gray-600 mt-1">...${tarjeta.last4}</p>
+                        <div class="mt-3">
+                            <div class="flex justify-between text-sm mb-2">
+                                <span>Utilización:</span>
+                                <span class="font-semibold">${porcentajeUtilizado.toFixed(1)}%</span>
+                            </div>
+                            <div class="w-full bg-gray-300 rounded-full h-2">
+                                <div class="bg-blue-600 h-2 rounded-full" style="width: ${Math.min(porcentajeUtilizado, 100)}%"></div>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-sm">
+                            <p>Deuda: <span class="font-semibold">$${tarjeta.deuda.toFixed(2)}</span></p>
+                            <p>Disponible: <span class="font-semibold">$${disponible.toFixed(2)}</span></p>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-gray-300">
+                            <p class="text-xs"><strong>Corte:</strong> Día ${tarjeta.fechaCorte}</p>
+                            <p class="text-xs"><strong>Estado:</strong> ${tarjeta.pagado ? '✅ Pagada' : '⏳ Pendiente'}</p>
+                        </div>
+                    `;
+                    resumen.appendChild(card);
+                });
+
+                this.calcularTotales();
+            },
+
+            actualizar(idx, campo, valor) {
+                if (campo === 'creditoTotal' || campo === 'deuda') {
+                    this.datos[idx][campo] = parseFloat(valor) || 0;
+                } else if (campo === 'fechaCorte' || campo === 'autopayDias') {
+                    this.datos[idx][campo] = parseInt(valor) || 0;
+                } else if (campo === 'pagado') {
+                    this.datos[idx][campo] = valor;
+                } else {
+                    this.datos[idx][campo] = valor;
+                }
+                this.guardar();
+            },
+
+            eliminar(idx) {
+                if (confirm('¿Eliminar esta tarjeta?')) {
+                    this.datos.splice(idx, 1);
+                    this.guardar();
+                }
+            },
+
+            agregarTarjeta() {
+                this.datos.push({
+                    nombre: 'Nueva Tarjeta',
+                    creditoTotal: 0.00,
+                    deuda: 0.00,
+                    last4: '0000',
+                    fechaCorte: 1,
+                    autopayDias: 1,
+                    pagado: false
+                });
+                this.guardar();
+            },
+
+            calcularTotales() {
+                const creditoTotal = this.datos.reduce((sum, t) => sum + t.creditoTotal, 0);
+                const deudaTotal = this.datos.reduce((sum, t) => sum + t.deuda, 0);
+                const disponibleTotal = creditoTotal - deudaTotal;
+                const porcentajePromedio = creditoTotal > 0 ? (deudaTotal / creditoTotal) * 100 : 0;
+
+                document.getElementById('creditoTotal').textContent = creditoTotal.toFixed(2);
+                document.getElementById('deudaTotal').textContent = deudaTotal.toFixed(2);
+                document.getElementById('disponibleTotal').textContent = disponibleTotal.toFixed(2);
+                document.getElementById('porcentajePromedio').textContent = Math.round(porcentajePromedio);
+            }
+        };
+
+        app.renderizar();
+    </script>
+</body>
+</html>
