@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gastos Fijos - Presupuesto Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .due-soon { background-color: #fef3c7; }
+        .due-urgent { background-color: #fee2e2; }
+        input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-900">Gastos Fijos Individuales</h1>
+                    <p class="text-gray-600 mt-2">Gastos solo para ti (sin compartir)</p>
+                </div>
+                <button onclick="agregarFijo()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition">
+                    ➕ Agregar
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Total Fijos</p>
+                    <p class="text-3xl font-bold text-gray-900">$<span id="totalFijos">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Pagados</p>
+                    <p class="text-3xl font-bold text-green-600">$<span id="pagados">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Por Pagar</p>
+                    <p class="text-3xl font-bold text-red-600">$<span id="porPagar">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">% Completado</p>
+                    <p class="text-3xl font-bold text-blue-600"><span id="porcentaje">0</span>%</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gray-900 text-white">
+                                <th class="px-4 py-4 text-left">✓</th>
+                                <th class="px-4 py-4 text-left">Concepto</th>
+                                <th class="px-4 py-4 text-right">Monto</th>
+                                <th class="px-4 py-4 text-left">Cuenta/Tarjeta</th>
+                                <th class="px-4 py-4 text-center">Vence</th>
+                                <th class="px-4 py-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableFijos"></tbody>
+                    </table>
+                </div>
+                <div class="bg-gray-50 px-4 py-4 border-t border-gray-200">
+                    <div class="flex justify-between items-center font-bold">
+                        <span class="text-gray-900">TOTAL FIJOS INDIVIDUALES</span>
+                        <span class="text-2xl text-gray-900">$<span id="totalFijosFooter">0.00</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DATOS = [
+            { concepto: 'Designer Payment', monto: 240.00, cuenta: 'Bank of America D.C.', vence: 1, pagado: false },
+            { concepto: 'Marketer Payment', monto: 180.00, cuenta: 'Bank of America D.C.', vence: 1, pagado: false },
+            { concepto: 'Google Workspace', monto: 35.70, cuenta: 'Rockland Trust CC', vence: 2, pagado: false },
+            { concepto: 'Car Insurance', monto: 199.00, cuenta: 'Bank of America D.C.', vence: 6, pagado: false },
+            { concepto: 'Cloudways', monto: 24.50, cuenta: 'Bank of America D.C.', vence: 8, pagado: false },
+            { concepto: 'ChatGPT', monto: 21.25, cuenta: 'Rockland Trust CC', vence: 10, pagado: false },
+            { concepto: 'CapCut', monto: 20.58, cuenta: 'Rockland Trust CC', vence: 14, pagado: false },
+            { concepto: 'Storage', monto: 57.00, cuenta: 'Capital One C.C.', vence: 21, pagado: false },
+            { concepto: 'Cell Phone', monto: 0.00, cuenta: 'Capital One C.C.', vence: 27, pagado: false },
+            { concepto: 'ClickUp', monto: 0.00, cuenta: 'Bank of America D.C.', vence: 29, pagado: false }
+        ];
+
+        let app = {
+            datos: JSON.parse(localStorage.getItem('fijos_app')) || DATOS,
+            
+            guardar() {
+                localStorage.setItem('fijos_app', JSON.stringify(this.datos));
+                this.renderizar();
+            },
+            
+            renderizar() {
+                const tabla = document.getElementById('tableFijos');
+                tabla.innerHTML = '';
+                
+                let sorted = [...this.datos].sort((a, b) => a.vence - b.vence);
+                
+                sorted.forEach((fijo, idx) => {
+                    const diasAlVencimiento = fijo.vence - new Date().getDate();
+                    let clase = '';
+                    if (diasAlVencimiento <= 2 && diasAlVencimiento > 0) clase = 'due-urgent';
+                    else if (diasAlVencimiento <= 5 && diasAlVencimiento > 0) clase = 'due-soon';
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = `border-b border-gray-200 hover:bg-gray-50 transition ${clase}`;
+                    tr.innerHTML = `
+                        <td class="px-4 py-4">
+                            <input type="checkbox" ${fijo.pagado ? 'checked' : ''} 
+                                   onchange="app.actualizarPagado(${idx}, this.checked)"
+                                   class="w-4 h-4 text-blue-600 rounded">
+                        </td>
+                        <td class="px-4 py-4">
+                            <input type="text" value="${fijo.concepto}" 
+                                   onchange="app.actualizar(${idx}, 'concepto', this.value)"
+                                   class="w-full px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <input type="number" value="${fijo.monto}" step="0.01"
+                                   onchange="app.actualizar(${idx}, 'monto', parseFloat(this.value))"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4">
+                            <input type="text" value="${fijo.cuenta}"
+                                   onchange="app.actualizar(${idx}, 'cuenta', this.value)"
+                                   class="w-full px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <input type="number" value="${fijo.vence}" min="1" max="31"
+                                   onchange="app.actualizar(${idx}, 'vence', parseInt(this.value))"
+                                   class="w-16 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <button onclick="app.eliminar(${idx})" class="text-red-600 hover:text-red-800 font-medium">🗑️</button>
+                        </td>
+                    `;
+                    tabla.appendChild(tr);
+                });
+                
+                this.actualizarTotales();
+            },
+            
+            actualizar(idx, campo, valor) {
+                this.datos[idx][campo] = valor;
+                this.guardar();
+            },
+            
+            actualizarPagado(idx, pagado) {
+                this.datos[idx].pagado = pagado;
+                this.guardar();
+            },
+            
+            eliminar(idx) {
+                if (confirm('¿Eliminar?')) {
+                    this.datos.splice(idx, 1);
+                    this.guardar();
+                }
+            },
+            
+            agregarFijo() {
+                this.datos.push({
+                    concepto: 'Nuevo Gasto',
+                    monto: 0.00,
+                    cuenta: '',
+                    vence: 1,
+                    pagado: false
+                });
+                this.guardar();
+            },
+            
+            actualizarTotales() {
+                const total = this.datos.reduce((sum, f) => sum + f.monto, 0);
+                const pagados = this.datos.filter(f => f.pagado).reduce((sum, f) => sum + f.monto, 0);
+                const porPagar = total - pagados;
+                const porcentaje = total > 0 ? Math.round((pagados / total) * 100) : 0;
+                
+                document.getElementById('totalFijos').textContent = total.toFixed(2);
+                document.getElementById('totalFijosFooter').textContent = total.toFixed(2);
+                document.getElementById('pagados').textContent = pagados.toFixed(2);
+                document.getElementById('porPagar').textContent = porPagar.toFixed(2);
+                document.getElementById('porcentaje').textContent = porcentaje;
+            }
+        };
+        
+        function agregarFijo() {
+            app.agregarFijo();
+        }
+        
+        app.renderizar();
+    </script>
+</body>
+</html>
