@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ingresos - Presupuesto Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .recibido { background-color: #dcfce7; }
+        .pendiente { background-color: #fef3c7; }
+        .no-recibido { background-color: #fee2e2; }
+        input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-900">Ingresos Mensuales</h1>
+                    <p class="text-gray-600 mt-2">Seguimiento de fuentes de ingresos</p>
+                </div>
+                <button onclick="app.agregarIngreso()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition">
+                    ➕ Agregar Ingreso
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Total Ingresos</p>
+                    <p class="text-3xl font-bold text-green-600">$<span id="totalIngresos">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Recibido</p>
+                    <p class="text-3xl font-bold text-green-600">$<span id="totalRecibido">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Pendiente</p>
+                    <p class="text-3xl font-bold text-yellow-600">$<span id="totalPendiente">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">% Recibido del Total</p>
+                    <p class="text-3xl font-bold text-blue-600"><span id="porcentajeRecibido">0</span>%</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gray-900 text-white">
+                                <th class="px-4 py-4 text-center">Fecha (Día)</th>
+                                <th class="px-4 py-4 text-left">Fuente de Ingreso</th>
+                                <th class="px-4 py-4 text-right">Monto</th>
+                                <th class="px-4 py-4 text-center">Estado</th>
+                                <th class="px-4 py-4 text-left">Notas</th>
+                                <th class="px-4 py-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaIngresos"></tbody>
+                    </table>
+                </div>
+                <div class="bg-gray-50 px-4 py-4 border-t border-gray-200">
+                    <div class="flex justify-between items-center font-bold">
+                        <span class="text-gray-900">TOTAL INGRESOS</span>
+                        <span class="text-2xl text-green-600">$<span id="totalIngresosFooter">0.00</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow mt-6 p-6">
+                <h2 class="text-2xl font-bold mb-4">Resumen por Fuente</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="resumenFuentes"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow mt-6 p-6">
+                <h2 class="text-2xl font-bold mb-4">Proyección Mensual</h2>
+                <div class="space-y-4" id="proyeccion"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DATOS_INICIALES = [
+            {
+                fecha: 1,
+                fuente: 'Fortnightly 1',
+                monto: 1662.63,
+                estado: 'recibido',
+                notas: 'Ingreso quincenal'
+            },
+            {
+                fecha: 16,
+                fuente: 'Fortnightly 1',
+                monto: 1605.35,
+                estado: 'recibido',
+                notas: 'Ingreso quincenal'
+            },
+            {
+                fecha: 0,
+                fuente: 'Paradise',
+                monto: 250.00,
+                estado: 'pendiente',
+                notas: 'Cliente adicional'
+            }
+        ];
+
+        let app = {
+            datos: JSON.parse(localStorage.getItem('ingresos_app')) || DATOS_INICIALES,
+
+            guardar() {
+                localStorage.setItem('ingresos_app', JSON.stringify(this.datos));
+                this.renderizar();
+            },
+
+            renderizar() {
+                const tabla = document.getElementById('tablaIngresos');
+                const resumen = document.getElementById('resumenFuentes');
+                const proyeccion = document.getElementById('proyeccion');
+                
+                tabla.innerHTML = '';
+                resumen.innerHTML = '';
+                proyeccion.innerHTML = '';
+
+                // Ordenar por fecha
+                const datosOrdenados = [...this.datos].sort((a, b) => a.fecha - b.fecha);
+
+                datosOrdenados.forEach((ingreso, idx) => {
+                    const originalIdx = this.datos.indexOf(ingreso);
+                    let clase = ingreso.estado === 'recibido' ? 'recibido' : ingreso.estado === 'pendiente' ? 'pendiente' : 'no-recibido';
+                    let estadoLabel = ingreso.estado === 'recibido' ? '✅ Recibido' : ingreso.estado === 'pendiente' ? '⏳ Pendiente' : '❌ No Recibido';
+
+                    const tr = document.createElement('tr');
+                    tr.className = `border-b border-gray-200 hover:bg-gray-50 transition ${clase}`;
+                    tr.innerHTML = `
+                        <td class="px-4 py-4 text-center font-semibold">
+                            <input type="number" value="${ingreso.fecha}" min="0" max="31"
+                                   onchange="app.actualizar(${originalIdx}, 'fecha', parseInt(this.value))"
+                                   class="w-16 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500">
+                            ${ingreso.fecha > 0 ? `<p class="text-xs text-gray-500">Día ${ingreso.fecha}</p>` : '<p class="text-xs text-gray-500">Sin fecha</p>'}
+                        </td>
+                        <td class="px-4 py-4">
+                            <input type="text" value="${ingreso.fuente}"
+                                   onchange="app.actualizar(${originalIdx}, 'fuente', this.value)"
+                                   class="w-full px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <input type="number" value="${ingreso.monto}" step="0.01"
+                                   onchange="app.actualizar(${originalIdx}, 'monto', parseFloat(this.value))"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <select onchange="app.actualizar(${originalIdx}, 'estado', this.value)"
+                                    class="px-2 py-1 border border-gray-300 rounded text-sm">
+                                <option value="recibido" ${ingreso.estado === 'recibido' ? 'selected' : ''}>✅ Recibido</option>
+                                <option value="pendiente" ${ingreso.estado === 'pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
+                                <option value="no-recibido" ${ingreso.estado === 'no-recibido' ? 'selected' : ''}>❌ No Recibido</option>
+                            </select>
+                        </td>
+                        <td class="px-4 py-4">
+                            <input type="text" value="${ingreso.notas}"
+                                   onchange="app.actualizar(${originalIdx}, 'notas', this.value)"
+                                   class="w-full px-2 py-1 border border-gray-300 rounded focus:border-blue-500"
+                                   placeholder="Notas...">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <button onclick="app.eliminar(${originalIdx})" class="text-red-600 hover:text-red-800 font-medium">🗑️</button>
+                        </td>
+                    `;
+                    tabla.appendChild(tr);
+                });
+
+                // Resumen por fuente
+                const fuentes = {};
+                this.datos.forEach(ingreso => {
+                    if (!fuentes[ingreso.fuente]) {
+                        fuentes[ingreso.fuente] = { total: 0, recibido: 0, pendiente: 0, noRecibido: 0 };
+                    }
+                    fuentes[ingreso.fuente].total += ingreso.monto;
+                    if (ingreso.estado === 'recibido') fuentes[ingreso.fuente].recibido += ingreso.monto;
+                    else if (ingreso.estado === 'pendiente') fuentes[ingreso.fuente].pendiente += ingreso.monto;
+                    else fuentes[ingreso.fuente].noRecibido += ingreso.monto;
+                });
+
+                Object.entries(fuentes).forEach(([fuente, datos]) => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-green-50 p-4 rounded-lg border-l-4 border-green-500';
+                    card.innerHTML = `
+                        <h3 class="font-bold text-gray-900">${fuente}</h3>
+                        <div class="mt-3 space-y-2 text-sm">
+                            <p><strong>Total:</strong> $${datos.total.toFixed(2)}</p>
+                            <p>✅ Recibido: <span class="text-green-600 font-semibold">$${datos.recibido.toFixed(2)}</span></p>
+                            <p>⏳ Pendiente: <span class="text-yellow-600 font-semibold">$${datos.pendiente.toFixed(2)}</span></p>
+                            <p>❌ No Recibido: <span class="text-red-600 font-semibold">$${datos.noRecibido.toFixed(2)}</span></p>
+                        </div>
+                    `;
+                    resumen.appendChild(card);
+                });
+
+                // Proyección
+                const totalProyectado = this.datos.reduce((sum, i) => sum + i.monto, 0);
+                const totalRecibidoProyectado = this.datos.filter(i => i.estado === 'recibido').reduce((sum, i) => sum + i.monto, 0);
+                const totalPendienteProyectado = this.datos.filter(i => i.estado === 'pendiente').reduce((sum, i) => sum + i.monto, 0);
+
+                const proyDiv = document.createElement('div');
+                proyDiv.className = 'bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500';
+                proyDiv.innerHTML = `
+                    <h3 class="font-bold text-gray-900 mb-3">Proyección Total Mensual</h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-600">Total Proyectado</p>
+                            <p class="text-2xl font-bold text-green-600">$${totalProyectado.toFixed(2)}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Ya Recibido</p>
+                            <p class="text-2xl font-bold text-green-600">$${totalRecibidoProyectado.toFixed(2)}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Por Recibir</p>
+                            <p class="text-2xl font-bold text-yellow-600">$${totalPendienteProyectado.toFixed(2)}</p>
+                        </div>
+                    </div>
+                `;
+                proyeccion.appendChild(proyDiv);
+
+                this.calcularTotales();
+            },
+
+            actualizar(idx, campo, valor) {
+                if (campo === 'fecha') {
+                    this.datos[idx][campo] = parseInt(valor) || 0;
+                } else if (campo === 'monto') {
+                    this.datos[idx][campo] = parseFloat(valor) || 0;
+                } else {
+                    this.datos[idx][campo] = valor;
+                }
+                this.guardar();
+            },
+
+            eliminar(idx) {
+                if (confirm('¿Eliminar este ingreso?')) {
+                    this.datos.splice(idx, 1);
+                    this.guardar();
+                }
+            },
+
+            agregarIngreso() {
+                this.datos.push({
+                    fecha: 0,
+                    fuente: 'Nueva Fuente',
+                    monto: 0.00,
+                    estado: 'no-recibido',
+                    notas: ''
+                });
+                this.guardar();
+            },
+
+            calcularTotales() {
+                const totalIngresos = this.datos.reduce((sum, i) => sum + i.monto, 0);
+                const totalRecibido = this.datos.filter(i => i.estado === 'recibido').reduce((sum, i) => sum + i.monto, 0);
+                const totalPendiente = this.datos.filter(i => i.estado === 'pendiente').reduce((sum, i) => sum + i.monto, 0);
+                const porcentajeRecibido = totalIngresos > 0 ? Math.round((totalRecibido / totalIngresos) * 100) : 0;
+
+                document.getElementById('totalIngresos').textContent = totalIngresos.toFixed(2);
+                document.getElementById('totalIngresosFooter').textContent = totalIngresos.toFixed(2);
+                document.getElementById('totalRecibido').textContent = totalRecibido.toFixed(2);
+                document.getElementById('totalPendiente').textContent = totalPendiente.toFixed(2);
+                document.getElementById('porcentajeRecibido').textContent = porcentajeRecibido;
+            }
+        };
+
+        app.renderizar();
+    </script>
+</body>
+</html>
