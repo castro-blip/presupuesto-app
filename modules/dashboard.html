@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Presupuesto Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .card-principal { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-5xl font-bold text-gray-900">Dashboard Financiero</h1>
+                    <p class="text-gray-600 mt-2">Resumen general de tu presupuesto personal</p>
+                </div>
+                <button onclick="app.sincronizar()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                    <span id="syncIcon">🔄</span> Sincronizar Datos
+                </button>
+            </div>
+
+            <!-- KPIs Principales -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="card-principal text-white p-6 rounded-lg shadow-lg">
+                    <p class="text-sm opacity-90">Ingresos Totales</p>
+                    <p class="text-4xl font-bold mt-2">$<span id="totalIngresos">0.00</span></p>
+                </div>
+                <div class="bg-red-600 text-white p-6 rounded-lg shadow-lg">
+                    <p class="text-sm opacity-90">Gastos Totales</p>
+                    <p class="text-4xl font-bold mt-2">$<span id="totalGastos">0.00</span></p>
+                </div>
+                <div class="bg-green-600 text-white p-6 rounded-lg shadow-lg">
+                    <p class="text-sm opacity-90">Balance</p>
+                    <p class="text-4xl font-bold mt-2">$<span id="balance">0.00</span></p>
+                </div>
+                <div class="bg-blue-600 text-white p-6 rounded-lg shadow-lg">
+                    <p class="text-sm opacity-90">% Gastado</p>
+                    <p class="text-4xl font-bold mt-2"><span id="porcentajeGastado">0</span>%</p>
+                </div>
+            </div>
+
+            <!-- Desglose de Gastos -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-2xl font-bold mb-4">Desglose de Gastos</h2>
+                    <div class="space-y-3" id="desgloceGastos"></div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-2xl font-bold mb-4">Estado General</h2>
+                    <div class="space-y-4" id="estadoGeneral"></div>
+                </div>
+            </div>
+
+            <!-- Gráficos -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-2xl font-bold mb-4">Ingresos vs Gastos</h2>
+                    <canvas id="chartIngresosGastos"></canvas>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-2xl font-bold mb-4">Distribución de Gastos</h2>
+                    <canvas id="chartDistribucion"></canvas>
+                </div>
+            </div>
+
+            <!-- Tarjetas de Crédito -->
+            <div class="bg-white p-6 rounded-lg shadow mb-8">
+                <h2 class="text-2xl font-bold mb-4">Tarjetas de Crédito</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="tarjetasResumen"></div>
+            </div>
+
+            <!-- Cuentas Bancarias -->
+            <div class="bg-white p-6 rounded-lg shadow mb-8">
+                <h2 class="text-2xl font-bold mb-4">Cuentas Bancarias</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="cuentasResumen"></div>
+            </div>
+
+            <!-- Deuda -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-2xl font-bold mb-4">Deuda Personal</h2>
+                <div id="deudaResumen"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let app = {
+            fijos: [],
+            compartidos: [],
+            variables: [],
+            tarjetas: [],
+            bancos: [],
+            ingresos: [],
+            deudas: [],
+            syncInterval: null,
+
+            cargarDatos() {
+                this.fijos = JSON.parse(localStorage.getItem('fijos_app')) || [];
+                this.compartidos = JSON.parse(localStorage.getItem('compartidos_app')) || [];
+                this.variables = JSON.parse(localStorage.getItem('variables_app')) || [];
+                this.tarjetas = JSON.parse(localStorage.getItem('tarjetas_app')) || [];
+                this.bancos = JSON.parse(localStorage.getItem('bancos_app')) || [];
+                this.ingresos = JSON.parse(localStorage.getItem('ingresos_app')) || [];
+                this.deudas = JSON.parse(localStorage.getItem('deudas_app')) || [];
+            },
+
+            sincronizar() {
+                const syncIcon = document.getElementById('syncIcon');
+                syncIcon.textContent = '⏳';
+                syncIcon.classList.add('pulse');
+
+                setTimeout(() => {
+                    this.cargarDatos();
+                    this.renderizar();
+                    syncIcon.textContent = '✅';
+                    syncIcon.classList.remove('pulse');
+
+                    setTimeout(() => {
+                        syncIcon.textContent = '🔄';
+                    }, 1500);
+                }, 800);
+            },
+
+            iniciarSincronizacionAutomatica() {
+                // Sincroniza cada 5 segundos
+                this.syncInterval = setInterval(() => {
+                    this.cargarDatos();
+                    this.renderizar();
+                }, 5000);
+            },
+
+            calcularTotales() {
+                // Ingresos
+                const totalIngresos = this.ingresos.reduce((sum, i) => sum + (i.estado === 'recibido' ? i.monto : 0), 0);
+                
+                // Gastos Fijos
+                const totalFijos = this.fijos.reduce((sum, f) => sum + f.monto, 0);
+                
+                // Gastos Compartidos
+                const totalCompartidos = this.compartidos.reduce((sum, c) => {
+                    const persona = c.personas.indexOf('Yo');
+                    return sum + (persona !== -1 ? c.montos[persona] : 0);
+                }, 0);
+                
+                // Gastos Variables
+                const totalVariables = this.variables.reduce((sum, v) => sum + v.monto, 0);
+                
+                // Total Gastos
+                const totalGastos = totalFijos + totalCompartidos + totalVariables;
+                
+                // Balance
+                const balance = totalIngresos - totalGastos;
+                const porcentajeGastado = totalIngresos > 0 ? Math.round((totalGastos / totalIngresos) * 100) : 0;
+
+                return {
+                    totalIngresos,
+                    totalFijos,
+                    totalCompartidos,
+                    totalVariables,
+                    totalGastos,
+                    balance,
+                    porcentajeGastado,
+                    sobrante: balance / 2 // 50% a deuda, 50% a ahorros
+                };
+            },
+
+            renderizar() {
+                const totales = this.calcularTotales();
+
+                // Actualizar KPIs
+                document.getElementById('totalIngresos').textContent = totales.totalIngresos.toFixed(2);
+                document.getElementById('totalGastos').textContent = totales.totalGastos.toFixed(2);
+                document.getElementById('balance').textContent = totales.balance.toFixed(2);
+                document.getElementById('porcentajeGastado').textContent = totales.porcentajeGastado;
+
+                // Desglose de Gastos
+                const desgloceDiv = document.getElementById('desgloceGastos');
+                desgloceDiv.innerHTML = `
+                    <div class="flex justify-between items-center p-3 bg-blue-50 rounded">
+                        <span class="font-semibold">Gastos Fijos</span>
+                        <span class="text-lg font-bold text-blue-600">$${totales.totalFijos.toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-green-50 rounded">
+                        <span class="font-semibold">Compartidos (Tu parte)</span>
+                        <span class="text-lg font-bold text-green-600">$${totales.totalCompartidos.toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-yellow-50 rounded">
+                        <span class="font-semibold">Gastos Variables</span>
+                        <span class="text-lg font-bold text-yellow-600">$${totales.totalVariables.toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between items-center p-3 bg-red-50 rounded border-2 border-red-300">
+                        <span class="font-bold">TOTAL GASTOS</span>
+                        <span class="text-lg font-bold text-red-600">$${totales.totalGastos.toFixed(2)}</span>
+                    </div>
+                `;
+
+                // Estado General
+                const estadoDiv = document.getElementById('estadoGeneral');
+                const claseBal = totales.balance >= 0 ? 'text-green-600' : 'text-red-600';
+                const clasePorcent = totales.porcentajeGastado <= 80 ? 'text-green-600' : 'text-yellow-600';
+                
+                estadoDiv.innerHTML = `
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Balance Mensual</p>
+                        <p class="text-3xl font-bold ${claseBal}">$${totales.balance.toFixed(2)}</p>
+                    </div>
+                    <div class="p-4 bg-purple-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Sobrante (50% c/u)</p>
+                        <p class="text-2xl font-bold text-purple-600">$${totales.sobrante.toFixed(2)}</p>
+                        <p class="text-xs text-gray-500 mt-1">→ Deuda: $${totales.sobrante.toFixed(2)}</p>
+                        <p class="text-xs text-gray-500">→ Ahorros: $${totales.sobrante.toFixed(2)}</p>
+                    </div>
+                    <div class="p-4 bg-orange-50 rounded-lg">
+                        <p class="text-sm text-gray-600">% Gastado del Ingreso</p>
+                        <p class="text-3xl font-bold ${clasePorcent}">${totales.porcentajeGastado}%</p>
+                    </div>
+                `;
+
+                // Gráficos
+                this.crearGraficos(totales);
+
+                // Tarjetas
+                const tarjetasDiv = document.getElementById('tarjetasResumen');
+                tarjetasDiv.innerHTML = '';
+                const creditoTotal = this.tarjetas.reduce((sum, t) => sum + t.creditoTotal, 0);
+                const deudaTarjetas = this.tarjetas.reduce((sum, t) => sum + t.deuda, 0);
+                const porcentajeTarjetas = creditoTotal > 0 ? Math.round((deudaTarjetas / creditoTotal) * 100) : 0;
+
+                const tarjetaCard = document.createElement('div');
+                tarjetaCard.className = 'bg-gradient-to-br from-blue-500 to-blue-700 text-white p-4 rounded-lg';
+                tarjetaCard.innerHTML = `
+                    <p class="text-sm opacity-90">Crédito Total</p>
+                    <p class="text-2xl font-bold mt-2">$${creditoTotal.toFixed(2)}</p>
+                    <p class="text-xs mt-2">Utilizado: ${porcentajeTarjetas}%</p>
+                    <div class="w-full bg-white/30 rounded-full h-2 mt-2">
+                        <div class="bg-white h-2 rounded-full" style="width: ${porcentajeTarjetas}%"></div>
+                    </div>
+                `;
+                tarjetasDiv.appendChild(tarjetaCard);
+
+                // Cuentas Bancarias
+                const cuentasDiv = document.getElementById('cuentasResumen');
+                cuentasDiv.innerHTML = '';
+                const saldoBancos = this.bancos.reduce((sum, b) => sum + b.saldo, 0);
+
+                const cuentaCard = document.createElement('div');
+                cuentaCard.className = 'bg-gradient-to-br from-green-500 to-green-700 text-white p-4 rounded-lg';
+                cuentaCard.innerHTML = `
+                    <p class="text-sm opacity-90">Saldo Total Bancos</p>
+                    <p class="text-2xl font-bold mt-2">$${saldoBancos.toFixed(2)}</p>
+                    <p class="text-xs mt-2">${this.bancos.length} cuentas</p>
+                `;
+                cuentasDiv.appendChild(cuentaCard);
+
+                // Deuda
+                const deudaDiv = document.getElementById('deudaResumen');
+                deudaDiv.innerHTML = '';
+                if (this.deudas.length > 0) {
+                    const deuda = this.deudas[0];
+                    const pendiente = deuda.deudaOriginal - deuda.pagado;
+                    const porcentajePagado = (deuda.pagado / deuda.deudaOriginal) * 100;
+
+                    deudaDiv.innerHTML = `
+                        <div class="grid grid-cols-4 gap-4">
+                            <div class="bg-red-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600">Original</p>
+                                <p class="text-2xl font-bold text-red-600">$${deuda.deudaOriginal.toFixed(2)}</p>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600">Pagado</p>
+                                <p class="text-2xl font-bold text-green-600">$${deuda.pagado.toFixed(2)}</p>
+                            </div>
+                            <div class="bg-yellow-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600">Pendiente</p>
+                                <p class="text-2xl font-bold text-yellow-600">$${pendiente.toFixed(2)}</p>
+                            </div>
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-600">Progreso</p>
+                                <p class="text-2xl font-bold text-blue-600">${porcentajePagado.toFixed(1)}%</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 w-full bg-gray-300 rounded-full h-4">
+                            <div class="bg-green-600 h-4 rounded-full" style="width: ${porcentajePagado}%"></div>
+                        </div>
+                    `;
+                }
+            },
+
+            crearGraficos(totales) {
+                // Gráfico Ingresos vs Gastos
+                const ctx1 = document.getElementById('chartIngresosGastos').getContext('2d');
+                if (window.chartIngresosGastos) window.chartIngresosGastos.destroy();
+                window.chartIngresosGastos = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Ingresos', 'Gastos', 'Balance'],
+                        datasets: [{
+                            label: 'Monto ($)',
+                            data: [totales.totalIngresos, totales.totalGastos, totales.balance],
+                            backgroundColor: ['#10b981', '#ef4444', '#3b82f6']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+
+                // Gráfico Distribución de Gastos
+                const ctx2 = document.getElementById('chartDistribucion').getContext('2d');
+                if (window.chartDistribucion) window.chartDistribucion.destroy();
+                window.chartDistribucion = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Fijos', 'Compartidos', 'Variables'],
+                        datasets: [{
+                            data: [totales.totalFijos, totales.totalCompartidos, totales.totalVariables],
+                            backgroundColor: ['#3b82f6', '#10b981', '#f59e0b']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom' }
+                        }
+                    }
+                });
+            }
+        };
+
+        // Inicializar
+        app.cargarDatos();
+        app.renderizar();
+        app.iniciarSincronizacionAutomatica();
+
+        // Limpiar interval al cerrar
+        window.addEventListener('beforeunload', () => {
+            clearInterval(app.syncInterval);
+        });
+    </script>
+</body>
+</html>
