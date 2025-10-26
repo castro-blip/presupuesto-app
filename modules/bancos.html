@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuentas Bancarias - Presupuesto Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .saldo-bajo { background-color: #fee2e2; }
+        .saldo-medio { background-color: #fef3c7; }
+        .saldo-alto { background-color: #dcfce7; }
+        .alerta-activa { background-color: #fecaca; }
+        input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-900">Cuentas Bancarias</h1>
+                    <p class="text-gray-600 mt-2">Seguimiento de cuentas y alertas</p>
+                </div>
+                <button onclick="app.agregarCuenta()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition">
+                    ➕ Agregar Cuenta
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Saldo Total</p>
+                    <p class="text-3xl font-bold text-gray-900">$<span id="saldoTotal">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Promedio por Cuenta</p>
+                    <p class="text-3xl font-bold text-blue-600">$<span id="promedioCuentas">0.00</span></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <p class="text-gray-600 text-sm">Alertas Activas</p>
+                    <p class="text-3xl font-bold text-red-600"><span id="conteoAlertas">0</span></p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gray-900 text-white">
+                                <th class="px-4 py-4 text-left">Banco</th>
+                                <th class="px-4 py-4 text-left">Tipo</th>
+                                <th class="px-4 py-4 text-left">Last 4 Tarjeta</th>
+                                <th class="px-4 py-4 text-left">Account Last 4</th>
+                                <th class="px-4 py-4 text-right">Saldo Actual</th>
+                                <th class="px-4 py-4 text-right">Límite Alerta</th>
+                                <th class="px-4 py-4 text-center">Estado</th>
+                                <th class="px-4 py-4 text-center">Alerta Activa</th>
+                                <th class="px-4 py-4 text-left">Notas</th>
+                                <th class="px-4 py-4 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCuentas"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-2xl font-bold mb-4">Resumen por Cuenta</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="resumenCuentas"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6 mt-6">
+                <h2 class="text-2xl font-bold mb-4">⚠️ Alertas Configuradas</h2>
+                <div class="space-y-2" id="listaAlertas"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DATOS_INICIALES = [
+            {
+                banco: 'Eastern (D.C.)',
+                tipo: 'Débito',
+                last4Tarjeta: '2728',
+                accountLast4: '436 5',
+                saldo: 0.00,
+                limiteAlerta: 0.00,
+                alertaActiva: false,
+                notas: 'Ahorros/otros'
+            },
+            {
+                banco: 'Bank of America (D.C.)',
+                tipo: 'Débito',
+                last4Tarjeta: '4836',
+                accountLast4: '7344',
+                saldo: 0.00,
+                limiteAlerta: 0.00,
+                alertaActiva: false,
+                notas: 'Cuenta principal de gastos'
+            },
+            {
+                banco: 'Rockland Trust (D.C.)',
+                tipo: 'Débito',
+                last4Tarjeta: '550',
+                accountLast4: '2816',
+                saldo: 0.00,
+                limiteAlerta: 0.00,
+                alertaActiva: false,
+                notas: 'Cuenta de recibos'
+            }
+        ];
+
+        let app = {
+            datos: JSON.parse(localStorage.getItem('bancos_app')) || DATOS_INICIALES,
+
+            guardar() {
+                localStorage.setItem('bancos_app', JSON.stringify(this.datos));
+                this.renderizar();
+            },
+
+            renderizar() {
+                const tabla = document.getElementById('tablaCuentas');
+                const resumen = document.getElementById('resumenCuentas');
+                const alertas = document.getElementById('listaAlertas');
+                
+                tabla.innerHTML = '';
+                resumen.innerHTML = '';
+                alertas.innerHTML = '';
+
+                let alertasActivas = 0;
+
+                this.datos.forEach((cuenta, idx) => {
+                    const alertada = cuenta.alertaActiva && cuenta.limiteAlerta > 0 && cuenta.saldo <= cuenta.limiteAlerta;
+                    if (alertada) alertasActivas++;
+
+                    let claseEstado = 'saldo-alto';
+                    let estado = 'Normal';
+                    
+                    if (cuenta.limiteAlerta > 0) {
+                        const porcentaje = (cuenta.saldo / cuenta.limiteAlerta) * 100;
+                        if (porcentaje <= 25) {
+                            claseEstado = 'saldo-bajo';
+                            estado = 'Bajo';
+                        } else if (porcentaje <= 50) {
+                            claseEstado = 'saldo-medio';
+                            estado = 'Medio';
+                        }
+                    }
+
+                    const filaeClase = alertada ? 'alerta-activa' : claseEstado;
+
+                    const tr = document.createElement('tr');
+                    tr.className = `border-b border-gray-200 hover:bg-gray-50 transition ${filaeClase}`;
+                    tr.innerHTML = `
+                        <td class="px-4 py-4 font-semibold">
+                            <input type="text" value="${cuenta.banco}"
+                                   onchange="app.actualizar(${idx}, 'banco', this.value)"
+                                   class="w-full px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4">
+                            <input type="text" value="${cuenta.tipo}"
+                                   onchange="app.actualizar(${idx}, 'tipo', this.value)"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 font-mono text-sm">
+                            <input type="text" value="${cuenta.last4Tarjeta}"
+                                   onchange="app.actualizar(${idx}, 'last4Tarjeta', this.value)"
+                                   class="w-20 px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 font-mono text-sm">
+                            <input type="text" value="${cuenta.accountLast4}"
+                                   onchange="app.actualizar(${idx}, 'accountLast4', this.value)"
+                                   class="w-20 px-2 py-1 border border-gray-300 rounded focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <input type="number" value="${cuenta.saldo}" step="0.01"
+                                   onchange="app.actualizar(${idx}, 'saldo', parseFloat(this.value))"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            <input type="number" value="${cuenta.limiteAlerta}" step="0.01"
+                                   onchange="app.actualizar(${idx}, 'limiteAlerta', parseFloat(this.value))"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500"
+                                   placeholder="0.00">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <span class="px-2 py-1 rounded-lg text-xs font-semibold ${claseEstado}">${estado}</span>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <input type="checkbox" ${cuenta.alertaActiva ? 'checked' : ''}
+                                   onchange="app.actualizar(${idx}, 'alertaActiva', this.checked)"
+                                   class="w-4 h-4 text-red-600 rounded">
+                        </td>
+                        <td class="px-4 py-4">
+                            <input type="text" value="${cuenta.notas}"
+                                   onchange="app.actualizar(${idx}, 'notas', this.value)"
+                                   class="w-full px-2 py-1 border border-gray-300 rounded focus:border-blue-500"
+                                   placeholder="Notas...">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <button onclick="app.eliminar(${idx})" class="text-red-600 hover:text-red-800 font-medium">🗑️</button>
+                        </td>
+                    `;
+                    tabla.appendChild(tr);
+
+                    // Resumen Card
+                    const card = document.createElement('div');
+                    card.className = `${filaeClase} p-4 rounded-lg border-l-4 ${alertada ? 'border-red-500' : claseEstado === 'saldo-bajo' ? 'border-red-400' : claseEstado === 'saldo-medio' ? 'border-yellow-500' : 'border-green-500'}`;
+                    
+                    const porcentajeEstado = cuenta.limiteAlerta > 0 ? ((cuenta.saldo / cuenta.limiteAlerta) * 100).toFixed(1) : '—';
+                    
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 class="font-bold text-gray-900">${cuenta.banco}</h3>
+                                <p class="text-xs text-gray-600">${cuenta.notas}</p>
+                            </div>
+                            ${alertada ? '<span class="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">⚠️ ALERTA</span>' : ''}
+                        </div>
+                        <div class="mt-3 space-y-2 text-sm">
+                            <p><strong>Saldo:</strong> $${cuenta.saldo.toFixed(2)}</p>
+                            <p><strong>Tarjeta:</strong> ...${cuenta.last4Tarjeta}</p>
+                            <p><strong>Cuenta:</strong> ...${cuenta.accountLast4}</p>
+                            ${cuenta.limiteAlerta > 0 ? `<p><strong>Límite Alerta:</strong> $${cuenta.limiteAlerta.toFixed(2)} (${porcentajeEstado}%)</p>` : ''}
+                        </div>
+                    `;
+                    resumen.appendChild(card);
+                });
+
+                // Mostrar alertas
+                this.datos.forEach((cuenta, idx) => {
+                    if (cuenta.alertaActiva && cuenta.limiteAlerta > 0 && cuenta.saldo <= cuenta.limiteAlerta) {
+                        const alertaDiv = document.createElement('div');
+                        alertaDiv.className = 'bg-red-50 border-l-4 border-red-500 p-4 rounded';
+                        alertaDiv.innerHTML = `
+                            <p class="font-bold text-red-800">🔴 ${cuenta.banco}</p>
+                            <p class="text-sm text-red-700 mt-1">Saldo: <strong>$${cuenta.saldo.toFixed(2)}</strong> - Límite: $${cuenta.limiteAlerta.toFixed(2)}</p>
+                            <p class="text-xs text-red-600 mt-2">⚠️ El saldo está en o por debajo del límite configurado</p>
+                        `;
+                        alertas.appendChild(alertaDiv);
+                    }
+                });
+
+                if (alertasActivas === 0 && alertas.innerHTML === '') {
+                    alertas.innerHTML = '<p class="text-green-600 text-sm">✅ Sin alertas activas</p>';
+                }
+
+                document.getElementById('conteoAlertas').textContent = alertasActivas;
+                this.calcularTotales();
+            },
+
+            actualizar(idx, campo, valor) {
+                if (campo === 'saldo' || campo === 'limiteAlerta') {
+                    this.datos[idx][campo] = parseFloat(valor) || 0;
+                } else if (campo === 'alertaActiva') {
+                    this.datos[idx][campo] = valor;
+                } else {
+                    this.datos[idx][campo] = valor;
+                }
+                this.guardar();
+            },
+
+            eliminar(idx) {
+                if (confirm('¿Eliminar esta cuenta?')) {
+                    this.datos.splice(idx, 1);
+                    this.guardar();
+                }
+            },
+
+            agregarCuenta() {
+                this.datos.push({
+                    banco: 'Nuevo Banco',
+                    tipo: 'Débito',
+                    last4Tarjeta: '0000',
+                    accountLast4: '0000',
+                    saldo: 0.00,
+                    limiteAlerta: 0.00,
+                    alertaActiva: false,
+                    notas: ''
+                });
+                this.guardar();
+            },
+
+            calcularTotales() {
+                const saldoTotal = this.datos.reduce((sum, c) => sum + c.saldo, 0);
+                const promedio = this.datos.length > 0 ? saldoTotal / this.datos.length : 0;
+
+                document.getElementById('saldoTotal').textContent = saldoTotal.toFixed(2);
+                document.getElementById('promedioCuentas').textContent = promedio.toFixed(2);
+            }
+        };
+
+        app.renderizar();
+    </script>
+</body>
+</html>
