@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gastos Compartidos - Presupuesto Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .pagado { background-color: #dcfce7; }
+        .pendiente { background-color: #fee2e2; }
+        .parcial { background-color: #fef3c7; }
+        input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        input:disabled { background-color: #f3f4f6; cursor: not-allowed; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen p-6">
+        <div class="max-w-full mx-auto">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-900">Gastos Compartidos</h1>
+                    <p class="text-gray-600 mt-2">División de gastos entre roommates</p>
+                </div>
+                <button onclick="app.agregarGasto()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition">
+                    ➕ Nuevo Gasto
+                </button>
+            </div>
+
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-900 text-white">
+                                <th class="px-4 py-4 text-left">Servicio</th>
+                                <th class="px-4 py-4 text-right">Total</th>
+                                <th class="px-4 py-4 text-center">Vence</th>
+                                <th class="px-4 py-4 text-center">Estado</th>
+                                <th class="px-4 py-4 text-center" colspan="5">Personas (divide automáticamente)</th>
+                                <th class="px-4 py-4 text-left">Notas</th>
+                                <th class="px-4 py-4 text-center">Acciones</th>
+                            </tr>
+                            <tr class="bg-gray-100 text-gray-700 text-xs">
+                                <th class="px-4 py-2"></th>
+                                <th class="px-4 py-2"></th>
+                                <th class="px-4 py-2"></th>
+                                <th class="px-4 py-2"></th>
+                                <th class="px-4 py-2 text-center font-semibold">Aida</th>
+                                <th class="px-4 py-2 text-center font-semibold">Tommy</th>
+                                <th class="px-4 py-2 text-center font-semibold">Luis-M</th>
+                                <th class="px-4 py-2 text-center font-semibold">Trebor</th>
+                                <th class="px-4 py-2 text-center font-semibold">Yo</th>
+                                <th class="px-4 py-2"></th>
+                                <th class="px-4 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaCompartidos"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow mt-6 p-6">
+                <h2 class="text-2xl font-bold mb-4">Totales por Persona</h2>
+                <div class="grid grid-cols-5 gap-4">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="text-gray-600 text-sm">Aida</p>
+                        <p class="text-2xl font-bold text-blue-600">$<span id="totalAida">0.00</span></p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <p class="text-gray-600 text-sm">Tommy</p>
+                        <p class="text-2xl font-bold text-green-600">$<span id="totalTommy">0.00</span></p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <p class="text-gray-600 text-sm">Luis-Maribel</p>
+                        <p class="text-2xl font-bold text-purple-600">$<span id="totalLuisM">0.00</span></p>
+                    </div>
+                    <div class="bg-orange-50 p-4 rounded-lg">
+                        <p class="text-gray-600 text-sm">Trebor</p>
+                        <p class="text-2xl font-bold text-orange-600">$<span id="totalTrebor">0.00</span></p>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-lg">
+                        <p class="text-gray-600 text-sm">Yo (Castro)</p>
+                        <p class="text-2xl font-bold text-red-600">$<span id="totalYo">0.00</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PERSONAS_TODAS = ['Aida', 'Tommy', 'Luis-Maribel', 'Trebor', 'Yo'];
+
+        const DATOS_INICIALES = [
+            { 
+                servicio: 'Rent', 
+                total: 3300.00, 
+                vence: 1, 
+                personas: ['Aida', 'Tommy', 'Luis-Maribel', 'Trebor', 'Yo'],
+                montos: [700.00, 614.00, 674.00, 700.00, 614.00],
+                estado: 'pendiente',
+                notas: 'Renta fija'
+            },
+            { 
+                servicio: 'Internet', 
+                total: 0.00, 
+                vence: 25, 
+                personas: ['Aida', 'Luis-Maribel', 'Yo'],
+                montos: [0.00, 0.00, 0.00],
+                estado: 'pendiente',
+                notas: 'Solo 3 personas'
+            },
+            { 
+                servicio: 'Electricity', 
+                total: 0.00, 
+                vence: 23, 
+                personas: ['Aida', 'Tommy', 'Luis-Maribel', 'Trebor', 'Yo'],
+                montos: [0.00, 0.00, 0.00, 0.00, 0.00],
+                estado: 'pendiente',
+                notas: 'Variable/mes'
+            },
+            { 
+                servicio: 'Gas', 
+                total: 0.00, 
+                vence: 2, 
+                personas: ['Aida', 'Tommy', 'Luis-Maribel', 'Trebor', 'Yo'],
+                montos: [0.00, 0.00, 0.00, 0.00, 0.00],
+                estado: 'pendiente',
+                notas: 'Variable/mes'
+            }
+        ];
+
+        let app = {
+            datos: JSON.parse(localStorage.getItem('compartidos_app')) || DATOS_INICIALES,
+
+            guardar() {
+                localStorage.setItem('compartidos_app', JSON.stringify(this.datos));
+                this.renderizar();
+            },
+
+            renderizar() {
+                const tabla = document.getElementById('tablaCompartidos');
+                tabla.innerHTML = '';
+
+                this.datos.forEach((gasto, idx) => {
+                    let clase = '';
+                    if (gasto.estado === 'pagado') clase = 'pagado';
+                    else if (gasto.estado === 'pendiente') clase = 'pendiente';
+                    else if (gasto.estado === 'parcial') clase = 'parcial';
+
+                    let cellasPersonas = '';
+                    PERSONAS_TODAS.forEach((persona) => {
+                        const pIdx = gasto.personas.indexOf(persona);
+                        const monto = pIdx !== -1 ? gasto.montos[pIdx] : 0;
+                        const disabled = pIdx === -1 ? 'disabled' : '';
+                        const onchange = pIdx !== -1 ? `onchange="app.actualizarMonto(${idx}, ${pIdx}, parseFloat(this.value))"` : '';
+                        const bgClass = pIdx === -1 ? 'bg-gray-100' : '';
+                        
+                        cellasPersonas += `
+                            <td class="px-4 py-4 text-center">
+                                <input type="number" value="${monto}" step="0.01" ${disabled} ${onchange}
+                                       class="w-20 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500 ${bgClass}">
+                            </td>
+                        `;
+                    });
+
+                    const tr = document.createElement('tr');
+                    tr.className = `border-b border-gray-200 ${clase}`;
+                    tr.innerHTML = `
+                        <td class="px-4 py-4 font-bold">${gasto.servicio}</td>
+                        <td class="px-4 py-4 text-right">
+                            <input type="number" value="${gasto.total}" step="0.01"
+                                   onchange="app.actualizarTotal(${idx}, parseFloat(this.value))"
+                                   class="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <input type="number" value="${gasto.vence}" min="1" max="31"
+                                   onchange="app.actualizar(${idx}, 'vence', parseInt(this.value))"
+                                   class="w-12 px-2 py-1 border border-gray-300 rounded text-center focus:border-blue-500">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <select onchange="app.actualizar(${idx}, 'estado', this.value)"
+                                    class="px-2 py-1 border border-gray-300 rounded text-sm">
+                                <option value="pendiente" ${gasto.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+                                <option value="parcial" ${gasto.estado === 'parcial' ? 'selected' : ''}>Parcial</option>
+                                <option value="pagado" ${gasto.estado === 'pagado' ? 'selected' : ''}>Pagado</option>
+                            </select>
+                        </td>
+                        ${cellasPersonas}
+                        <td class="px-4 py-4">
+                            <input type="text" value="${gasto.notas}" 
+                                   onchange="app.actualizar(${idx}, 'notas', this.value)"
+                                   class="w-32 px-2 py-1 border border-gray-300 rounded focus:border-blue-500 text-sm"
+                                   placeholder="Notas...">
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <button onclick="app.eliminar(${idx})" class="text-red-600 hover:text-red-800 font-medium">🗑️</button>
+                        </td>
+                    `;
+                    tabla.appendChild(tr);
+                });
+
+                this.calcularTotales();
+            },
+
+            actualizarTotal(idx, total) {
+                this.datos[idx].total = total;
+                const numPersonas = this.datos[idx].personas.length;
+                this.datos[idx].montos = this.datos[idx].personas.map(() => total / numPersonas);
+                this.guardar();
+            },
+
+            actualizarMonto(idx, pIdx, monto) {
+                this.datos[idx].montos[pIdx] = monto;
+                this.datos[idx].total = this.datos[idx].montos.reduce((a, b) => a + b, 0);
+                this.guardar();
+            },
+
+            actualizar(idx, campo, valor) {
+                this.datos[idx][campo] = valor;
+                this.guardar();
+            },
+
+            eliminar(idx) {
+                if (confirm('¿Eliminar este gasto?')) {
+                    this.datos.splice(idx, 1);
+                    this.guardar();
+                }
+            },
+
+            agregarGasto() {
+                this.datos.push({
+                    servicio: 'Nuevo Gasto',
+                    total: 0.00,
+                    vence: 1,
+                    personas: PERSONAS_TODAS,
+                    montos: [0.00, 0.00, 0.00, 0.00, 0.00],
+                    estado: 'pendiente',
+                    notas: ''
+                });
+                this.guardar();
+            },
+
+            calcularTotales() {
+                const totalesPorPersona = {
+                    'Aida': 0,
+                    'Tommy': 0,
+                    'Luis-Maribel': 0,
+                    'Trebor': 0,
+                    'Yo': 0
+                };
+
+                this.datos.forEach(gasto => {
+                    gasto.personas.forEach((persona, idx) => {
+                        totalesPorPersona[persona] += gasto.montos[idx];
+                    });
+                });
+
+                document.getElementById('totalAida').textContent = totalesPorPersona['Aida'].toFixed(2);
+                document.getElementById('totalTommy').textContent = totalesPorPersona['Tommy'].toFixed(2);
+                document.getElementById('totalLuisM').textContent = totalesPorPersona['Luis-Maribel'].toFixed(2);
+                document.getElementById('totalTrebor').textContent = totalesPorPersona['Trebor'].toFixed(2);
+                document.getElementById('totalYo').textContent = totalesPorPersona['Yo'].toFixed(2);
+            }
+        };
+
+        app.renderizar();
+    </script>
+</body>
+</html>
